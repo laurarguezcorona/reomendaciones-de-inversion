@@ -1,0 +1,69 @@
+
+```{r}
+
+# Cargar las librerías necesarias
+install.packages(c("quantmod", "dplyr", "TTR"))
+install.packages("stringr")
+library(stringr)
+library(quantmod)
+library(dplyr)
+library(TTR)
+# Fuente de los datos
+source("https://raw.githubusercontent.com/OscarVDelatorreTorres/yahooFinance/main/datosMultiplesYahooFinance.R")
+
+# Definir los tickers de interés y fechas
+tickerV <- c("ALSEA", "AC", "AMD", "RA")
+deD <- "2024-01-01"
+hastaD <- Sys.Date()
+per <- "D"
+
+# Obtener los datos históricos
+Datos <- historico_multiples_precios(tickers = tickerV, de = deD, hasta = hastaD, periodicidad = per)
+
+
+# Crear una lista para almacenar los resultados de cada ticker
+resultados <- list()
+
+# Iterar sobre cada ticker para calcular los indicadores y tomar decisiones
+for (ticker in tickerV) {
+  # Obtener los precios de cierre
+  precios <- Cl(get(ticker))
+  
+  # Calcular la banda de Bollinger a 20 periodos
+  bbands <- BBands(precios, n = 20, maType = SMA)
+  
+  # Calcular el MACD
+  macd <- MACD(precios)
+  macd_signal <- macdSignal(macd)
+  
+  # Calcular el oscilador estocástico
+  sto <- stoch(precios, n = 7, nFastD = 3, nSlowD = 3)
+  
+  # Programar las reglas de decisión para cada indicador
+  decision_bb <- ifelse(tail(precios, 1) > tail(bbands$up, 1), "Vender",
+                        ifelse(tail(precios, 1) < tail(bbands$dn, 1), "Comprar", "Mantener"))
+  
+  decision_macd <- ifelse(tail(macd_signal, 1) > 0, "Compra",
+                          ifelse(tail(macd_signal, 1) < 0, "Venta", "Mantener"))
+  
+  decision_sto <- ifelse(tail(sto$fastD, 1) > 80, "Venta",
+                         ifelse(tail(sto$fastD, 1) < 20, "Compra", "Mantener"))
+  
+  # Regla de decisión general
+  decision_general <- ifelse(decision_bb == "Vender" | decision_macd == "Venta" | decision_sto == "Venta", "Vender",
+                             ifelse(decision_bb == "Comprar" | decision_macd == "Compra" | decision_sto == "Compra", "Comprar", "Mantener"))
+  
+  # Almacenar los resultados en la lista
+  resultados[[ticker]] <- data.frame(Ticker = ticker, Banda_Bollinger = decision_bb, MACD = decision_macd, Oscilador_Estocastico = decision_sto, Decision_General = decision_general)
+}
+
+# Crear una tabla con los resultados
+tabla_resultados <- do.call(rbind, resultados)
+
+# Imprimir la tabla de resultados
+print (tabla_resultados)
+
+```
+
+
+
